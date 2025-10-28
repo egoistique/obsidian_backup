@@ -3107,3 +3107,190 @@ for (int i = 0; i < arr.Length; i++)
 
 ## 🧩**Делегаты**
  
+### 💡 **Что такое делегаты**
+
+> 🔹 **Делегаты** — это механизм в .NET Framework, обеспечивающий **безопасный по типам** способ организации **функций обратного вызова (callback)**.
+
+🧠 В отличие от классического C/C++:
+
+- Делегаты **знают сигнатуру метода** (параметры и возвращаемое значение);
+    
+- Они **гарантируют безопасность типов**;
+    
+- Могут ссылаться на **несколько методов сразу** (multicast);
+    
+- Поддерживают **вызов статических и экземплярных методов**.
+    
+
+---
+
+### 🧩 **Зачем нужны делегаты**
+
+> 🔸 Делегаты используются там, где требуется **вызов метода, неизвестного на момент компиляции**.
+
+Примеры применения:
+
+- обработка событий (щелчки по кнопкам, изменения состояния окон);
+    
+- уведомления об **исключениях**, **изменениях файлов**, **завершении асинхронных операций**;
+    
+- реализация **асинхронных вызовов** и **обратных вызовов** (callback).
+    
+
+---
+
+### ⚙️ **Проблема функций обратного вызова в C/C++**
+
+В **C/C++** функции обратного вызова представляют собой **указатели на функции**:
+
+`void qsort(void* base, size_t num, size_t size, int (*compare)(const void*, const void*));`
+
+❌ Однако указатель на функцию **не содержит информации**:
+
+- о числе параметров,
+    
+- о типах аргументов,
+    
+- о типе возвращаемого значения,
+    
+- о соглашении о вызовах (calling convention).
+    
+
+➡️ Это делает код **небезопасным по типам**, хотя и быстрым.
+
+---
+
+### ✅ **Преимущества делегатов в .NET**
+
+|Возможность|Описание|
+|---|---|
+|**Типобезопасность**|Компилятор проверяет, совпадает ли сигнатура метода с сигнатурой делегата|
+|**Гибкость**|Можно вызывать методы разных классов (статические и экземплярные)|
+|**Multicast**|Делегат может вызывать **несколько методов** последовательно|
+|**Инкапсуляция**|Делегат хранит не только ссылку на метод, но и **контекст объекта**|
+
+---
+
+### 🧱 **Объявление и использование делегата**
+
+`internal delegate void Feedback(Int32 value);`
+
+📘 Этот делегат описывает метод с параметром `Int32`, возвращающий `void`.
+
+Он похож на `typedef` из C/C++ — задаёт **тип ссылки на метод**, соответствующий определённой сигнатуре.
+
+---
+
+### 🧰 **Пример использования делегатов**
+
+`using System; using System.Windows.Forms; using System.IO;  internal delegate void Feedback(Int32 value);  public sealed class Program {     public static void Main() {         StaticDelegateDemo();         InstanceDelegateDemo();         ChainDelegateDemo1(new Program());         ChainDelegateDemo2(new Program());     } }`
+
+---
+
+#### 🔹 **1. Пример: Статический делегат**
+
+`private static void StaticDelegateDemo() {     Console.WriteLine("----- Static Delegate Demo -----");     Counter(1, 3, null);     Counter(1, 3, new Feedback(Program.FeedbackToConsole));     Counter(1, 3, new Feedback(FeedbackToMsgBox)); }`
+
+💬 Здесь метод `Counter` получает делегат `Feedback`.  
+Если делегат не равен `null`, вызывается соответствующий метод.
+
+---
+
+#### 🧩 **Метод Counter**
+
+`private static void Counter(Int32 from, Int32 to, Feedback fb) {     for (Int32 val = from; val <= to; val++) {         if (fb != null)             fb(val); // Вызов метода обратного вызова     } }`
+
+📘 `Counter` просто перебирает числа и вызывает делегат для каждого значения.  
+Таким образом, можно динамически менять **поведение метода**.
+
+---
+
+#### 🖥️ **Методы обратного вызова**
+
+`private static void FeedbackToConsole(Int32 value) {     Console.WriteLine("Item=" + value); }  private static void FeedbackToMsgBox(Int32 value) {     MessageBox.Show("Item=" + value); }  private void FeedbackToFile(Int32 value) {     using (StreamWriter sw = new StreamWriter("Status", true)) {         sw.WriteLine("Item=" + value);     } }`
+
+🧠 Автор показывает три варианта вывода:
+
+1. В консоль 🖥️
+    
+2. В окно MessageBox 💬
+    
+3. В файл 📁
+    
+
+---
+
+#### 🔸 **2. Пример: Делегат экземпляра класса**
+
+`private static void InstanceDelegateDemo() {     Console.WriteLine("----- Instance Delegate Demo -----");     Program p = new Program();     Counter(1, 3, new Feedback(p.FeedbackToFile)); }`
+
+📍 Здесь создаётся **делегат экземпляра** — он хранит:
+
+- ссылку на **объект p**;
+    
+- и на **метод FeedbackToFile**, принадлежащий этому объекту.
+    
+
+---
+
+### 🔗 **Объединение делегатов (Multicast Delegates)**
+
+Делегаты можно **объединять в цепочку вызовов**.  
+Для этого используется класс `System.Delegate` и методы `Combine` и `Remove`.
+
+---
+
+#### 🧩 **3. Пример: Комбинирование вручную**
+
+`private static void ChainDelegateDemo1(Program p) {     Feedback fb1 = new Feedback(FeedbackToConsole);     Feedback fb2 = new Feedback(FeedbackToMsgBox);     Feedback fb3 = new Feedback(p.FeedbackToFile);      Feedback fbChain = null;     fbChain = (Feedback)Delegate.Combine(fbChain, fb1);     fbChain = (Feedback)Delegate.Combine(fbChain, fb2);     fbChain = (Feedback)Delegate.Combine(fbChain, fb3);      Counter(1, 2, fbChain);      fbChain = (Feedback)Delegate.Remove(fbChain, new Feedback(FeedbackToMsgBox));     Counter(1, 2, fbChain); }`
+
+📘 Таким образом, `fbChain` вызывает три метода подряд:  
+`FeedbackToConsole → FeedbackToMsgBox → FeedbackToFile`.
+
+После удаления одного делегата (`FeedbackToMsgBox`) остаются только два.
+
+---
+
+#### 🔹 **4. Пример: Сокращённый синтаксис**
+
+`private static void ChainDelegateDemo2(Program p) {     Feedback fb1 = new Feedback(FeedbackToConsole);     Feedback fb2 = new Feedback(FeedbackToMsgBox);     Feedback fb3 = new Feedback(p.FeedbackToFile);      Feedback fbChain = null;     fbChain += fb1;     fbChain += fb2;     fbChain += fb3;      Counter(1, 2, fbChain);      fbChain -= new Feedback(FeedbackToMsgBox);     Counter(1, 2, fbChain); }`
+
+🧠 `+=` и `-=` — синтаксический сахар для `Delegate.Combine` и `Delegate.Remove`.
+
+---
+
+### 🧠 **Разбор примера и объяснение автора**
+
+- Делегат `Feedback` определяет **сигнатуру обратного вызова**:
+    
+    `void Feedback(Int32 value)`
+    
+- Метод `Counter` **не знает**, что именно делает делегат — он просто **вызывает его**.  
+    Это **инкапсуляция поведения** — мощная идея делегатов.
+    
+
+🧩 Таким образом, можно **отделить логику вычислений** от **реакции на событие**:
+
+- Один метод считает или обрабатывает данные;
+    
+- Другие — получают уведомления через делегаты.
+    
+
+---
+
+### 🔚 **Итог**
+
+|Концепция|Описание|
+|---|---|
+|**Делегат**|Ссылочный тип, инкапсулирующий ссылку на метод и объект|
+|**Типобезопасность**|Проверка сигнатуры методов на этапе компиляции|
+|**Multicast**|Один делегат может вызывать несколько методов|
+|**Гибкость**|Поддержка как статических, так и экземплярных методов|
+|**Инкапсуляция**|Делегаты позволяют передавать поведение как параметр|
+
+---
+
+> 💬 **Вывод автора:**  
+> Делегаты — это фундаментальный элемент .NET, обеспечивающий типобезопасные функции обратного вызова и позволяющий передавать методы как аргументы.  
+> Они лежат в основе **событий**, **лямбда-выражений** и **асинхронного программирования** в C#.
+
