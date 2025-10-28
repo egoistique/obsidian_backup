@@ -3183,13 +3183,38 @@ for (int i = 0; i < arr.Length; i++)
 
 ### 🧰 **Пример использования делегатов**
 
-`using System; using System.Windows.Forms; using System.IO;  internal delegate void Feedback(Int32 value);  public sealed class Program {     public static void Main() {         StaticDelegateDemo();         InstanceDelegateDemo();         ChainDelegateDemo1(new Program());         ChainDelegateDemo2(new Program());     } }`
+```cs
+using System; 
+using System.Windows.Forms; 
+using System.IO;  
+
+internal delegate void Feedback(Int32 value);  
+
+public sealed class Program 
+{     
+	public static void Main() 
+	{         
+		StaticDelegateDemo();         
+		InstanceDelegateDemo();         
+		ChainDelegateDemo1(new Program());         
+		ChainDelegateDemo2(new Program());     
+	} 
+}
+```
 
 ---
 
 #### 🔹 **1. Пример: Статический делегат**
 
-`private static void StaticDelegateDemo() {     Console.WriteLine("----- Static Delegate Demo -----");     Counter(1, 3, null);     Counter(1, 3, new Feedback(Program.FeedbackToConsole));     Counter(1, 3, new Feedback(FeedbackToMsgBox)); }`
+```cs
+private static void StaticDelegateDemo() 
+{     
+	Console.WriteLine("----- Static Delegate Demo -----");     
+	Counter(1, 3, null);     
+	Counter(1, 3, new Feedback(Program.FeedbackToConsole));     
+	Counter(1, 3, new Feedback(FeedbackToMsgBox)); 
+}
+```
 
 💬 Здесь метод `Counter` получает делегат `Feedback`.  
 Если делегат не равен `null`, вызывается соответствующий метод.
@@ -3198,7 +3223,16 @@ for (int i = 0; i < arr.Length; i++)
 
 #### 🧩 **Метод Counter**
 
-`private static void Counter(Int32 from, Int32 to, Feedback fb) {     for (Int32 val = from; val <= to; val++) {         if (fb != null)             fb(val); // Вызов метода обратного вызова     } }`
+``` cs
+private static void Counter(Int32 from, Int32 to, Feedback fb) 
+{     
+	for (Int32 val = from; val <= to; val++) 
+	{         
+		if (fb != null)             
+			fb(val); // Вызов метода обратного вызова     
+	} 
+}
+```
 
 📘 `Counter` просто перебирает числа и вызывает делегат для каждого значения.  
 Таким образом, можно динамически менять **поведение метода**.
@@ -3207,7 +3241,25 @@ for (int i = 0; i < arr.Length; i++)
 
 #### 🖥️ **Методы обратного вызова**
 
-`private static void FeedbackToConsole(Int32 value) {     Console.WriteLine("Item=" + value); }  private static void FeedbackToMsgBox(Int32 value) {     MessageBox.Show("Item=" + value); }  private void FeedbackToFile(Int32 value) {     using (StreamWriter sw = new StreamWriter("Status", true)) {         sw.WriteLine("Item=" + value);     } }`
+```cs
+private static void FeedbackToConsole(Int32 value) 
+{     
+	Console.WriteLine("Item=" + value); 
+}  
+
+private static void FeedbackToMsgBox(Int32 value) 
+{     
+	MessageBox.Show("Item=" + value); 
+}  
+
+private void FeedbackToFile(Int32 value) 
+{     
+	using (StreamWriter sw = new StreamWriter("Status", true)) 
+	{         
+		sw.WriteLine("Item=" + value);     
+	} 
+}
+```
 
 🧠 Автор показывает три варианта вывода:
 
@@ -3222,7 +3274,14 @@ for (int i = 0; i < arr.Length; i++)
 
 #### 🔸 **2. Пример: Делегат экземпляра класса**
 
-`private static void InstanceDelegateDemo() {     Console.WriteLine("----- Instance Delegate Demo -----");     Program p = new Program();     Counter(1, 3, new Feedback(p.FeedbackToFile)); }`
+```cs
+private static void InstanceDelegateDemo() 
+{     
+	Console.WriteLine("----- Instance Delegate Demo -----");     
+	Program p = new Program();     
+	Counter(1, 3, new Feedback(p.FeedbackToFile)); 
+}
+```
 
 📍 Здесь создаётся **делегат экземпляра** — он хранит:
 
@@ -3242,7 +3301,23 @@ for (int i = 0; i < arr.Length; i++)
 
 #### 🧩 **3. Пример: Комбинирование вручную**
 
-`private static void ChainDelegateDemo1(Program p) {     Feedback fb1 = new Feedback(FeedbackToConsole);     Feedback fb2 = new Feedback(FeedbackToMsgBox);     Feedback fb3 = new Feedback(p.FeedbackToFile);      Feedback fbChain = null;     fbChain = (Feedback)Delegate.Combine(fbChain, fb1);     fbChain = (Feedback)Delegate.Combine(fbChain, fb2);     fbChain = (Feedback)Delegate.Combine(fbChain, fb3);      Counter(1, 2, fbChain);      fbChain = (Feedback)Delegate.Remove(fbChain, new Feedback(FeedbackToMsgBox));     Counter(1, 2, fbChain); }`
+```cs
+private static void ChainDelegateDemo1(Program p) 
+{     
+	Feedback fb1 = new Feedback(FeedbackToConsole);     
+	Feedback fb2 = new Feedback(FeedbackToMsgBox);     
+	Feedback fb3 = new Feedback(p.FeedbackToFile);     
+	
+	Feedback fbChain = null;     
+	
+	fbChain = (Feedback)Delegate.Combine(fbChain, fb1);     
+	fbChain = (Feedback)Delegate.Combine(fbChain, fb2);     
+	fbChain = (Feedback)Delegate.Combine(fbChain, fb3);    
+	  
+	Counter(1, 2, fbChain);      
+	fbChain = (Feedback)Delegate.Remove(fbChain, new Feedback(FeedbackToMsgBox));      Counter(1, 2, fbChain); 
+}
+```
 
 📘 Таким образом, `fbChain` вызывает три метода подряд:  
 `FeedbackToConsole → FeedbackToMsgBox → FeedbackToFile`.
@@ -3253,7 +3328,24 @@ for (int i = 0; i < arr.Length; i++)
 
 #### 🔹 **4. Пример: Сокращённый синтаксис**
 
-`private static void ChainDelegateDemo2(Program p) {     Feedback fb1 = new Feedback(FeedbackToConsole);     Feedback fb2 = new Feedback(FeedbackToMsgBox);     Feedback fb3 = new Feedback(p.FeedbackToFile);      Feedback fbChain = null;     fbChain += fb1;     fbChain += fb2;     fbChain += fb3;      Counter(1, 2, fbChain);      fbChain -= new Feedback(FeedbackToMsgBox);     Counter(1, 2, fbChain); }`
+```cs
+private static void ChainDelegateDemo2(Program p) 
+{     
+	Feedback fb1 = new Feedback(FeedbackToConsole);     
+	Feedback fb2 = new Feedback(FeedbackToMsgBox);     
+	Feedback fb3 = new Feedback(p.FeedbackToFile);   
+	   
+	Feedback fbChain = null;     
+	
+	fbChain += fb1;     
+	fbChain += fb2;     
+	fbChain += fb3;     
+	 
+	Counter(1, 2, fbChain);      
+	fbChain -= new Feedback(FeedbackToMsgBox);     
+	Counter(1, 2, fbChain); 
+}
+```
 
 🧠 `+=` и `-=` — синтаксический сахар для `Delegate.Combine` и `Delegate.Remove`.
 
@@ -3293,4 +3385,5 @@ for (int i = 0; i < arr.Length; i++)
 > 💬 **Вывод автора:**  
 > Делегаты — это фундаментальный элемент .NET, обеспечивающий типобезопасные функции обратного вызова и позволяющий передавать методы как аргументы.  
 > Они лежат в основе **событий**, **лямбда-выражений** и **асинхронного программирования** в C#.
+
 
