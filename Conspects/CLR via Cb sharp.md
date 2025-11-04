@@ -3819,7 +3819,7 @@ public void Invoke(Int32 value)
 
 ---
 
-### 🔸 Удаление делегатов из цепочки
+#### 🔸 Удаление делегатов из цепочки
 
 Для удаления используется метод `Delegate.Remove`:
 
@@ -3836,21 +3836,35 @@ public void Invoke(Int32 value)
 
 ---
 
-### 🔸 Делегаты с возвращаемым значением
+#### 🔸 Делегаты с возвращаемым значением
 
 Если делегат возвращает значение:
 
 `public delegate Int32 Feedback(Int32 value);`
 
 Псевдокод `Invoke`:
-
-`public Int32 Invoke(Int32 value) {     Int32 result;     Delegate[] delegateSet = _invocationList as Delegate[];     if (delegateSet != null) {         foreach (Feedback d in delegateSet)             result = d(value); // сохраняется результат последнего вызова     } else {         result = _methodPtr.Invoke(_target, value);     }     return result; }`
+```cs
+public Int32 Invoke(Int32 value) 
+{     
+	Int32 result;     
+	Delegate[] delegateSet = _invocationList as Delegate[];     
+	if (delegateSet != null) 
+	{         
+		foreach (Feedback d in delegateSet)             
+		result = d(value); // сохраняется результат последнего вызова     
+	} else 
+	{         
+		result = _methodPtr.Invoke(_target, value);     
+	}     
+	return result; 
+}
+```
 
 ⚠️ Только **результат последнего делегата** сохраняется и возвращается.
 
 ---
 
-### 🔸 Упрощённая работа с цепочками в C#
+#### 🔸 Упрощённая работа с цепочками в C#
 
 Компилятор заменяет операторы `+=` и `-=` на вызовы `Delegate.Combine` и `Delegate.Remove`.
 
@@ -3860,7 +3874,7 @@ public void Invoke(Int32 value)
 
 ---
 
-### 🔸 Проблемы стандартных цепочек
+#### 🔸 Проблемы стандартных цепочек
 
 1. Возвращается только результат последнего вызова.
     
@@ -3869,7 +3883,7 @@ public void Invoke(Int32 value)
 
 ---
 
-### 🔸 Решение: метод `GetInvocationList`
+#### 🔸 Решение: метод `GetInvocationList`
 
 Метод `MulticastDelegate.GetInvocationList()` позволяет **получить массив всех делегатов в цепочке** и вызвать их вручную.
 
@@ -3882,17 +3896,81 @@ public void Invoke(Int32 value)
 
 ---
 
-### 🔸 Пример использования `GetInvocationList`
+#### 🔸 Пример использования `GetInvocationList`
 
-`using System; using System.Reflection; using System.Text;  internal sealed class Light {     public String SwitchPosition() {         return "The light is off";     } }  internal sealed class Fan {     public String Speed() {         throw new InvalidOperationException("The fan broke due to overheating");     } }  internal sealed class Speaker {     public String Volume() {         return "The volume is loud";     } }  public sealed class Program {     private delegate String GetStatus();      public static void Main() {         GetStatus getStatus = null;          getStatus += new GetStatus(new Light().SwitchPosition);         getStatus += new GetStatus(new Fan().Speed);         getStatus += new GetStatus(new Speaker().Volume);          Console.WriteLine(GetComponentStatusReport(getStatus));     }      private static String GetComponentStatusReport(GetStatus status) {         if (status == null) return null;          StringBuilder report = new StringBuilder();         Delegate[] arrayOfDelegates = status.GetInvocationList();          foreach (GetStatus getStatus in arrayOfDelegates) {             try {                 report.AppendFormat("{0}{1}{1}", getStatus(), Environment.NewLine);             }             catch (InvalidOperationException e) {                 Object component = getStatus.Target;                 report.AppendFormat(                     "Failed to get status from {1}{2}{0} Error: {3}{0}{0}",                     Environment.NewLine,                     ((component == null) ? "" : component.GetType() + "."),                     getStatus.Method.Name,                     e.Message                 );             }         }          return report.ToString();     } }`
+```cs
+using System; 
+using System.Reflection; 
+using System.Text;  
+internal sealed class Light 
+{     
+	public String SwitchPosition() 
+	{         
+		return "The light is off";     
+	} 
+}  
+internal sealed class Fan 
+{     
+	public String Speed() 
+	{         
+		throw new InvalidOperationException("The fan broke due to overheating");   
+	} 
+}  
+internal sealed class Speaker 
+{     
+	public String Volume() 
+	{         
+		return "The volume is loud";     
+	} 
+}  
+public sealed class Program 
+{     
+	private delegate String GetStatus();      
+	public static void Main() 
+	{         
+		GetStatus getStatus = null;          
+		getStatus += new GetStatus(new Light().SwitchPosition);         
+		getStatus += new GetStatus(new Fan().Speed);         
+		getStatus += new GetStatus(new Speaker().Volume);  
+		Console.WriteLine(GetComponentStatusReport(getStatus));     
+	}      
+	private static String GetComponentStatusReport(GetStatus status) 
+	{         
+		if (status == null) 
+			return null;          
+		StringBuilder report = new StringBuilder();         
+		Delegate[] arrayOfDelegates = status.GetInvocationList();          
+		foreach (GetStatus getStatus in arrayOfDelegates) 
+		{             
+		try 
+		{                 
+			report.AppendFormat("{0}{1}{1}", getStatus(), Environment.NewLine);
+		}             
+		catch (InvalidOperationException e) 
+		{                 
+			Object component = getStatus.Target;
+		    report.AppendFormat("Failed to get status from {1}{2}{0} Error: {3}{0}{0}", Environment.NewLine,((component == null) ? "" : component.GetType() + "."), getStatus.Method.Name,e.Message);
+		 }         
+		}          
+		 return report.ToString();     
+	 } 
+}
+```
 
 **Результат выполнения:**
 
-`The light is off Failed to get status from Fan.Speed  Error: The fan broke due to overheating The volume is loud`
+```
+The light is off 
+
+Failed to get status from Fan.Speed  
+Error: The fan broke due to overheating 
+
+The volume is loud
+```
 
 ---
 
-### 🔹 Выводы
+#### 🔹 Выводы
 
 - Цепочки делегатов позволяют вызывать несколько методов последовательно.
     
@@ -3901,3 +3979,4 @@ public void Invoke(Int32 value)
 - При вызове возвращается только результат последнего делегата.
     
 - Для управления цепочкой и обработки ошибок рекомендуется `GetInvocationList()`.
+
