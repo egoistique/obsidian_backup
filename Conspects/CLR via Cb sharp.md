@@ -3980,3 +3980,150 @@ The volume is loud
     
 - Для управления цепочкой и обработки ошибок рекомендуется `GetInvocationList()`.
 
+### 💡Обобщённые делегаты
+
+Ранее в .NET существовало множество делегатов с одинаковыми сигнатурами, например:
+
+```cs
+public delegate void TryCode(Object userData); 
+public delegate void WaitCallback(Object state); 
+public delegate void TimerCallback(Object state);
+```
+
+Все они принимают `Object` и возвращают `void`.  
+Теперь, благодаря **обобщениям**, вместо множества типов используются универсальные делегаты:
+
+#### 🔸 Делегаты `Action`
+
+Используются, когда метод **ничего не возвращает**:
+
+```cs
+public delegate void Action(); public delegate void Action<T>(T obj); public delegate void Action<T1, T2>(T1 arg1, T2 arg2); ... public delegate void Action<T1,...,T16>(T1 arg1,...,T16 arg16);
+```
+
+Существует 17 версий (от 0 до 16 аргументов).
+
+#### 🔸Делегаты `Func`
+
+Используются, когда метод **возвращает значение**:
+
+```cs
+public delegate TResult Func<TResult>(); public delegate TResult Func<T, TResult>(T arg); public delegate TResult Func<T1, T2, TResult>(T1 arg1, T2 arg2); ... public delegate TResult Func<T1,...,T16, TResult>(T1 arg1,...,T16 arg16);
+```
+
+Тоже 17 версий.
+
+**Рекомендация:**  
+Использовать `Action<>` и `Func<>` вместо определения своих делегатов.  
+Собственные делегаты нужны только при:
+
+- использовании `ref`/`out`,
+    
+- параметрах `params`,
+    
+- необходимости задать значения по умолчанию или ограничения типов.
+    
+
+Также делегаты поддерживают **ковариантность и контравариантность** (см. гл. 12).
+
+---
+
+### 💡 Упрощённый синтаксис делегатов
+
+Раньше требовалось явно создавать экземпляр делегата:
+
+`button1.Click += new EventHandler(button1_Click);`
+
+Теперь достаточно:
+
+`button1.Click += button1_Click;`
+
+Компилятор сам создаёт нужный IL-код.
+
+---
+
+#### 🔸Упрощение 1: Без `new`
+
+Можно не создавать объект делегата вручную:
+
+```cs
+ThreadPool.QueueUserWorkItem(SomeAsyncTask, 5);  private static void SomeAsyncTask(Object o) {     Console.WriteLine(o); }
+```
+
+Компилятор сам создаёт `WaitCallback`.
+
+---
+
+#### 🔸 Упрощение 2: Без отдельного метода (лямбда-выражения)
+
+Можно передать код прямо в виде **лямбды**:
+
+`ThreadPool.QueueUserWorkItem(obj => Console.WriteLine(obj), 5);`
+
+🔹 Лямбда-выражение (`=>`) — это компактный способ описать анонимную функцию.  
+Компилятор создаёт для неё скрытый метод с атрибутом:
+
+`[CompilerGenerated] private static void <ИмяМетода>b__0(Object obj) { ... }`
+
+Примеры лямбд:
+
+```cs
+Func<String> f = () => "Jeff"; 
+Func<Int32, String> f2 = n => n.ToString(); 
+Func<Int32, Int32, String> f3 = (n1, n2) => (n1 + n2).ToString(); 
+Bar b = (out Int32 n) => n = 5; // делегат с out
+```
+
+Многострочное тело:
+
+```cs
+Func<Int32, Int32, String> f7 = (n1, n2) => 
+{     
+	Int32 sum = n1 + n2;     return sum.ToString(); 
+};
+```
+
+🟩 **Совет:**  
+Использовать лямбды, если код короткий (1–3 строки).  
+Для больших фрагментов лучше писать именованные методы — удобнее для отладки.
+
+---
+
+#### 🔸 Упрощение 3: Использование локальных переменных в лямбдах (замыкания)
+
+Лямбда может обращаться к локальным переменным метода:
+
+```cs
+public static void UsingLocalVariablesInTheCallbackCode(Int32 numToDo) {     Int32[] squares = new Int32[numToDo];     AutoResetEvent done = new AutoResetEvent(false);      for (Int32 n = 0; n < squares.Length; n++) {         ThreadPool.QueueUserWorkItem(obj => {             Int32 num = (Int32)obj;             squares[num] = num * num;             if (Interlocked.Decrement(ref numToDo) == 0)                 done.Set();         }, n);     }      done.WaitOne();     for (Int32 n = 0; n < squares.Length; n++)         Console.WriteLine("Index {0}, Square={1}", n, squares[n]); }
+```
+
+Компилятор автоматически создаёт **вспомогательный класс** для хранения локальных переменных:
+
+```cs
+private sealed class <>c__DisplayClass2 {     public Int32[] squares;     public Int32 numToDo;     public AutoResetEvent done;      public void <UsingLocalVariablesInTheCallbackCode>b__0(Object obj) {         Int32 num = (Int32)obj;         squares[num] = num * num;         if (Interlocked.Decrement(ref numToDo) == 0)             done.Set();     } }
+```
+
+⚠️ Переменные, участвующие в замыкании, живут дольше — до уничтожения объекта вспомогательного класса.
+
+---
+
+#### 📘Итог: преимущества лямбд
+
+- Упрощают запись кода;
+    
+- Позволяют встроить код в нужное место без отдельного метода;
+    
+- Повышают читаемость и продуктивность.
+    
+
+Пример естественного использования:
+
+```cs
+String[] names = { "Jeff", "Kristin", "Aidan", "Grant" }; 
+Char charToFind = 'a';  
+
+names = Array.FindAll(names, name => name.IndexOf(charToFind) >= 0); 
+names = Array.ConvertAll(names, name => name.ToUpper()); 
+Array.ForEach(names, Console.WriteLine);
+```
+
