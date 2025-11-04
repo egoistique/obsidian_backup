@@ -3733,5 +3733,171 @@ private static void Counter(Int32 from, Int32 to, Feedback fb)
     
 - Делегаты обеспечивают **типобезопасность** и **инкапсуляцию механизма обратного вызова**.
 
-### Обратный вызов нескольких методов (цепочки делегатов)
+### 🔹Обратный вызов нескольких методов (цепочки делегатов)
 
+
+#### 🔸 Что такое цепочка делегатов
+
+- **Цепочка (chaining)** — это коллекция делегатов, позволяющая вызывать **несколько методов подряд** через один вызов.
+    
+- Делегаты объединяются в цепочку при помощи статического метода `Delegate.Combine`.
+    
+
+---
+
+#### 🔸 Пример создания цепочки
+
+`fbChain = (Feedback) Delegate.Combine(fbChain, fb1);`
+
+- Если `fbChain == null`, метод `Combine` просто присваивает ей значение `fb1`.
+    
+- При добавлении новых делегатов создаётся **новый объект делегата**, чьё поле `_invocationList` ссылается на **массив делегатов**, которые входят в цепочку.
+    
+
+---
+
+#### 🔸 Принцип работы `Combine`
+
+- При первом объединении:
+    
+    - `_invocationList = null`, `fbChain` указывает на `fb1`.
+        
+- При добавлении `fb2`:
+    
+    - создаётся новый делегат;
+        
+    - `_invocationList` = массив `[fb1, fb2]`;
+        
+    - `fbChain` теперь ссылается на этот новый делегат.
+        
+- При добавлении `fb3`:
+    
+    - создаётся новый массив `[fb1, fb2, fb3]`;
+        
+    - старый делегат и массив попадают под **сборку мусора**.
+        
+
+---
+
+#### 🔸 Вызов цепочки
+
+`Counter(1, 2, fbChain);`
+
+Метод `Counter` вызывает `fb(val);`, что компилятор превращает в `fb.Invoke(val);`.
+
+**Во время выполнения:**
+
+- Если `_invocationList != null`, CLR **перебирает все делегаты в массиве** и вызывает каждый по очереди.
+    
+- Методы вызываются в порядке добавления:
+    
+    1. `FeedbackToConsole`
+        
+    2. `FeedbackToMsgBox`
+        
+    3. `FeedbackToFile`
+        
+
+---
+
+#### 🔸 Как выглядит метод `Invoke` (псевдокод)
+
+```cs
+public void Invoke(Int32 value) 
+{     
+	Delegate[] delegateSet = _invocationList as Delegate[];    
+	if (delegateSet != null) 
+	{         
+		foreach (Feedback d in delegateSet)             
+		d(value); // Вызов каждого делегата     
+	} else 
+	{         
+		_methodPtr.Invoke(_target, value);         // В реальности это машинный вызов, не выражаемый в C#     
+	} 
+}
+```
+
+---
+
+### 🔸 Удаление делегатов из цепочки
+
+Для удаления используется метод `Delegate.Remove`:
+
+`fbChain = (Feedback) Delegate.Remove(fbChain, new Feedback(FeedbackToMsgBox));`
+
+- `Remove` ищет совпадение `_target` и `_methodPtr` во всей цепочке.
+    
+- Если найден делегат — создаётся **новый массив без этого элемента**.
+    
+- Если был единственный делегат — возвращается `null`.
+    
+- Удаляется **только первый найденный элемент**, а не все совпадения.
+    
+
+---
+
+### 🔸 Делегаты с возвращаемым значением
+
+Если делегат возвращает значение:
+
+`public delegate Int32 Feedback(Int32 value);`
+
+Псевдокод `Invoke`:
+
+`public Int32 Invoke(Int32 value) {     Int32 result;     Delegate[] delegateSet = _invocationList as Delegate[];     if (delegateSet != null) {         foreach (Feedback d in delegateSet)             result = d(value); // сохраняется результат последнего вызова     } else {         result = _methodPtr.Invoke(_target, value);     }     return result; }`
+
+⚠️ Только **результат последнего делегата** сохраняется и возвращается.
+
+---
+
+### 🔸 Упрощённая работа с цепочками в C#
+
+Компилятор заменяет операторы `+=` и `-=` на вызовы `Delegate.Combine` и `Delegate.Remove`.
+
+`fbChain += fb1; fbChain += fb2; fbChain -= fb3;`
+
+✅ Результирующий IL-код идентичен ручному использованию `Combine` и `Remove`.
+
+---
+
+### 🔸 Проблемы стандартных цепочек
+
+1. Возвращается только результат последнего вызова.
+    
+2. Если один из делегатов выбрасывает исключение или «зависает», выполнение **остальной цепочки прекращается**.
+    
+
+---
+
+### 🔸 Решение: метод `GetInvocationList`
+
+Метод `MulticastDelegate.GetInvocationList()` позволяет **получить массив всех делегатов в цепочке** и вызвать их вручную.
+
+`public sealed override Delegate[] GetInvocationList();`
+
+- Возвращает массив `Delegate[]`, каждый элемент которого — отдельный делегат.
+    
+- Если `_invocationList == null`, массив содержит один элемент.
+    
+
+---
+
+### 🔸 Пример использования `GetInvocationList`
+
+`using System; using System.Reflection; using System.Text;  internal sealed class Light {     public String SwitchPosition() {         return "The light is off";     } }  internal sealed class Fan {     public String Speed() {         throw new InvalidOperationException("The fan broke due to overheating");     } }  internal sealed class Speaker {     public String Volume() {         return "The volume is loud";     } }  public sealed class Program {     private delegate String GetStatus();      public static void Main() {         GetStatus getStatus = null;          getStatus += new GetStatus(new Light().SwitchPosition);         getStatus += new GetStatus(new Fan().Speed);         getStatus += new GetStatus(new Speaker().Volume);          Console.WriteLine(GetComponentStatusReport(getStatus));     }      private static String GetComponentStatusReport(GetStatus status) {         if (status == null) return null;          StringBuilder report = new StringBuilder();         Delegate[] arrayOfDelegates = status.GetInvocationList();          foreach (GetStatus getStatus in arrayOfDelegates) {             try {                 report.AppendFormat("{0}{1}{1}", getStatus(), Environment.NewLine);             }             catch (InvalidOperationException e) {                 Object component = getStatus.Target;                 report.AppendFormat(                     "Failed to get status from {1}{2}{0} Error: {3}{0}{0}",                     Environment.NewLine,                     ((component == null) ? "" : component.GetType() + "."),                     getStatus.Method.Name,                     e.Message                 );             }         }          return report.ToString();     } }`
+
+**Результат выполнения:**
+
+`The light is off Failed to get status from Fan.Speed  Error: The fan broke due to overheating The volume is loud`
+
+---
+
+### 🔹 Выводы
+
+- Цепочки делегатов позволяют вызывать несколько методов последовательно.
+    
+- Можно использовать `+=` и `-=` вместо `Delegate.Combine` и `Remove`.
+    
+- При вызове возвращается только результат последнего делегата.
+    
+- Для управления цепочкой и обработки ошибок рекомендуется `GetInvocationList()`.
