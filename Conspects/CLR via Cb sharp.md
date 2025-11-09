@@ -5609,3 +5609,117 @@ using System.Runtime.CompilerServices;  internal sealed class SomeType {     [Me
 > помогает разрабатывать надёжные и отлаживаемые приложения.
 
 
+### 📘 **Генерирование исключений**
+
+ **Когда нужно генерировать исключения**
+
+Метод должен **генерировать исключение**, если не может выполнить свою задачу.  
+Перед этим следует продумать два момента:
+
+1. **Выбор типа исключения**
+    
+    - Исключения должны быть производными от `System.Exception`.
+        
+    - Используйте существующие типы FCL (например, `ArgumentException`, `InvalidOperationException`) — только если они подходят по смыслу.
+        
+    - Если подходящего типа нет — создайте собственный класс исключения.
+        
+    - **Не создавайте объекты `System.Exception` напрямую** — это базовый класс, его следовало бы сделать абстрактным.
+        
+    - В иерархии исключений избегайте множества базовых классов — они могут обрабатывать ошибки слишком обобщённо и небезопасно.
+        
+    
+    ⚠️ **Совместимость и безопасность**  
+    При создании нового типа, производного от существующего, старый код может начать перехватывать и новый тип, что:
+    
+    - иногда полезно (если ожидается общее поведение);
+        
+    - иногда опасно (может вызвать непредсказуемую реакцию или брешь в безопасности).  
+        Программист, создающий новый тип, **не может знать**, как старый код обрабатывает базовые исключения.
+        
+2. **Выбор текста сообщения**
+    
+    - Сообщение (`Message`) должно **четко объяснять причину ошибки** и содержать максимум технических подробностей.
+        
+    - Это сообщение не видит пользователь, оно предназначено для **разработчиков и журналов ошибок**.
+        
+    - Необработанное исключение почти всегда попадает в лог — там сообщение пригодится для диагностики.
+        
+    - По умолчанию сообщения пишут **на английском языке**, но можно локализовать, если библиотека ориентирована на конкретный регион.
+        
+    - Microsoft локализует сообщения FCL, чтобы облегчить работу локальных разработчиков.
+
+### 📘 **Создание классов исключений**
+
+#### 🔹 Общие принципы
+
+Создание собственных классов исключений — **сложная и рискованная задача**, т.к. они должны поддерживать **сериализацию** (для передачи между доменами приложений, записи в лог или базу данных).
+
+Чтобы упростить задачу, предлагается использовать **обобщённый шаблон исключений** — `Exception<TExceptionArgs>`.
+
+---
+
+#### 🔹 Обобщённый класс `Exception<TExceptionArgs>`
+
+```
+[Serializable] public sealed class Exception<TExceptionArgs> : Exception, ISerializable     where TExceptionArgs : ExceptionArgs {     private const string c_args = "Args";     private readonly TExceptionArgs m_args;     public TExceptionArgs Args => m_args;      public Exception(string message = null, Exception innerException = null)         : this(null, message, innerException) { }      public Exception(TExceptionArgs args, string message = null,                      Exception innerException = null)         : base(message, innerException)     {         m_args = args;     }      // Конструктор для десериализации     private Exception(SerializationInfo info, StreamingContext context)         : base(info, context)     {         m_args = (TExceptionArgs)info.GetValue(c_args, typeof(TExceptionArgs));     }      public override void GetObjectData(SerializationInfo info, StreamingContext context)     {         info.AddValue(c_args, m_args);         base.GetObjectData(info, context);     }      public override string Message =>         (m_args == null) ? base.Message : $"{base.Message} ({m_args.Message})";      public override bool Equals(object obj)     {         var other = obj as Exception<TExceptionArgs>;         if (other == null) return false;         return Equals(m_args, other.m_args) && base.Equals(obj);     }      public override int GetHashCode() => base.GetHashCode(); }
+```
+
+---
+
+#### 🔹 Базовый вспомогательный класс `ExceptionArgs`
+
+```cs
+[Serializable] public abstract class ExceptionArgs {     public virtual string Message => string.Empty; }
+```
+
+Он нужен для передачи **дополнительных параметров**, связанных с причиной исключения.
+
+---
+
+#### 🔹 Пример пользовательского аргумента исключения
+
+Пример: нехватка места на диске.
+
+```cs
+[Serializable] public sealed class DiskFullExceptionArgs : ExceptionArgs {     private readonly string m_diskpath;     public string DiskPath => m_diskpath;      public DiskFullExceptionArgs(string diskpath)     {         m_diskpath = diskpath;     }      public override string Message =>         (m_diskpath == null) ? base.Message : $"DiskPath={m_diskpath}"; }
+```
+
+Если никаких данных передавать не нужно:
+
+`[Serializable] public sealed class DiskFullExceptionArgs : ExceptionArgs { }`
+
+---
+
+#### 🔹 Пример генерации и обработки исключения
+
+```cs
+public static void TestException() {     try     {         throw new Exception<DiskFullExceptionArgs>(             new DiskFullExceptionArgs(@"C:\"), "The disk is full");     }     catch (Exception<DiskFullExceptionArgs> e)     {         Console.WriteLine(e.Message);     } }
+```
+
+Вывод:
+
+`The disk is full (DiskPath=C:\)`
+
+---
+
+#### ⚙️ Замечания
+
+1. Все исключения, созданные с помощью `Exception<TExceptionArgs>`, являются производными от `System.Exception`.  
+    → Это делает их **совместимыми** с CLS и удобными для использования в любом .NET-языке.
+    
+2. В **Visual Studio** при появлении необработанных исключений параметр обобщённого типа (`<T>`) может **не отображаться** в окне диагностики, хотя тип технически присутствует.
+    
+
+---
+
+#### 📎 Итог
+
+|Что важно помнить|Суть|
+|---|---|
+|Исключения должны быть информативными|Сообщения для логов, не для пользователей|
+|Собственные типы — осознанно|Избегать лишних базовых классов|
+|Все исключения сериализуемы|Для передачи и логирования|
+|Использование `Exception<TExceptionArgs>`|Универсальный шаблон, упрощающий реализацию|
+|Локализация сообщений|Только при необходимости|
+
